@@ -1,13 +1,12 @@
-# GraphQL-meets-Protocbufs
+# GraphQL-meets-Protocbufs in Go
 GraphQL meets Protocol Buffers Sample project. A simple project that takes a protobuf model and generates the serialization functions and GraphQL schemes that allow users to query data through an API with GraphQL.
 
-We have an API written in golang that communicates with protocol-buffers from Google. Now we want the API to expose this data to the outside world and allow users to query this data with GraphQL. Protocol buffers is a mechanism for serializing structured data. You write your data definition and generate source code for serialize and deserialization. The datastreams can be transferred or stored in a fast binary way using a variety of languages. GraphQL is a query language for your API, and a server-side runtime for executing queries by using a type system you define for your data.
- 
-The problem is that it would be easy for small models, but when the size and amount of models increases so does effort to support GraphQL. After writing the protocol buffers and generating the source code for the models, we need to write the GraphQL scheme to be able to execute the queries on the data. With only a few models this is manageable. When the number of models increase, so does the line of codes we need to write to support GraphQL. The situation get easily out of hand and maintaining the code would be a nightmare. So why not directly generate the support for GraphQL.
+We have an API written in Golang and want to extend it with GraphQL support. The API receives events with protocol-buffers from Google and distributed these events to users. Now we want the API to expose this data to the outside world and allow users to query this data with GraphQL. Protocol buffers is a mechanism for serializing structured data. You write your data definition and generate source code for serialize- and deserialization. The generated code can easily write and read your structured data to and from a variety of data streams and using a variety of languages. The data streams can be transferred or stored in a fast binary way using a variety of languages. GraphQL is a query language for your API, and a server-side runtime for executing queries by using a type system you define for your data.
 
-First we need to install the protocol buffer compiler. For more information https://developers.google.com/protocol-buffers
+The problem is that it would be easy for small models, but when the size and amount of models increases so does the effort to support GraphQL. After writing the protocol buffers and generating the source code for the models, we need to write the GraphQL scheme to be able to execute the queries on the data. With only a few models this is manageable. When the number of models increases, so does the line of codes we need to write to support GraphQL. The situation gets easily out of hand and maintaining the code would be a nightmare. So why not directly generate the support for GraphQL.
 
-For linux x86-64 we do:
+First, we need to install the protocol buffer compiler. This allows us to generate the source code for data streams in this case Go.  To install the compiler on Linux we executed the following commands. For other platforms or more information see https://developers.google.com/protocol-buffers.
+
 ``` shell script
 wget https://github.com/protocolbuffers/protobuf/releases/download/v3.9.0/protoc-3.9.0-linux-x86_64.zip
 unzip protoc-3.9.0-linux-x86_64.zip -d protoc3
@@ -16,14 +15,14 @@ sudo mv protoc3/include/* /usr/local/include/
 rm protoc-3.9.0-linux-x86_64.zip
 ```
 
-Then we need some golang dependencies.
+Then we need some Go dependencies. We want to have Go support for Protocol Buffers and the Protobuf GraphQL extension.
 
 ```shell script
 go get -u github.com/golang/protobuf/protoc-gen-go
 go get -u github.com/bi-foundation/protobuf-graphql-extension/protoc-gen-gogoopsee
 ```
 
-Now we are ready to write some code. We start writing the protobuf. Just a simple one as an example. We add the option to generate the GraphQL schemes.
+Now we are ready to write some code. We start writing the protobuf definition. Just a simple example of a person with a phone number. We add the option to generate the GraphQL schemes.
 
 ```protobuf
 syntax = "proto3";
@@ -58,9 +57,9 @@ Now we are ready to generate some source code:
 protoc --gogoopsee_out=plugins=grpc+graphql,Mopsee/protobuf/opsee.proto=github.com/opsee/protobuf/opseeproto,Mgoogle/protobuf/descriptor.proto=github.com/gogo/protobuf/protoc-gen-gogo/descriptor:./models --proto_path=$GOPATH/src:. *.proto
 ```
 
-The protoc program generates two files, models.pb.go and modelspb_test.go. The file contains for each object and variable serialization methods and also GraphQL schemes.
+The protoc compiler generates two files, models.pb.go and modelspb_test.go. The file contains for each object and variable serialization methods and also GraphQL schemes. The source contains data definitions,  functions to read and write binary data, and GraphQL type definitions. Note that just by enabling the graphql plugin in the gogoopsee_out flag we get the GraphQL type definitions. The plugin extends the protobuf generator and uses the information gathered to generate GraphQL types for each object. 
 
-Now we need to be able to query the generated models. We write a function that takes the query and the data and produce a result. A query scheme is created that wraps the data in a query. It assigns the person data to the GraphQL Person type.
+Now we need to be able to query the generated models. We write a function that takes the query and the data and produces the filtered data. A query scheme is created that wraps the data in a query. It links the query to the data whereon it's executed. It assigns the data of the person to the GraphQL Person type. 
 
 ```go
 func Query(filtering string, person *models.Person) (interface{}, error) {
@@ -98,7 +97,7 @@ func queryScheme(person interface{}) (graphql.Schema, error) {
 }
 ```
  
-As we want users to query the data, build a simple API that handles a user request to retrieve the filtered data. In main we start an HTTP listener on port 8080. When a post 
+As we want users to query the data, build a simple API that handles a user request to retrieve the filtered data. In main we start an HTTP listener on port 8080. When a post is received with the query, the queryHandler retrieves the latest data and executes the query on the data.  
 
 ```go
 func main() {
@@ -143,7 +142,7 @@ func getData() (*models.Person, error) {
 }
 ```
 
-That’s it. Now we can test it. We start the API and do post with a GraphQL query. We execute the following curl to retrieve the name and the number of a person:
+That’s it. Now we can test it. We start the API and post a GraphQL query. We execute the following curl to retrieve the name and the number of a person:
 
 ```shell script
 curl -X POST http://localhost:8080/query -d "{ name phone { number } }"
